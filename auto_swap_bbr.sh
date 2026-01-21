@@ -216,6 +216,14 @@ show_status() {
   echo
   echo "========== Status =========="
   echo "BBR/FQ:"
+  local qdisc cc
+  qdisc="$(sysctl -n net.core.default_qdisc 2>/dev/null || true)"
+  cc="$(sysctl -n net.ipv4.tcp_congestion_control 2>/dev/null || true)"
+  if [[ "$qdisc" == "fq" && "$cc" == "bbr" ]]; then
+    echo "Effective: enabled (qdisc=fq, cc=bbr)"
+  else
+    echo "Effective: disabled (qdisc=${qdisc:-unknown}, cc=${cc:-unknown})"
+  fi
   if [[ -f "$SYSCTL_CONF" ]]; then
     echo "Config: enabled (${SYSCTL_CONF})"
   else
