@@ -212,6 +212,34 @@ show_summary() {
   echo "============================="
 }
 
+show_status() {
+  echo
+  echo "========== Status =========="
+  echo "BBR/FQ:"
+  if [[ -f "$SYSCTL_CONF" ]]; then
+    echo "Config: enabled (${SYSCTL_CONF})"
+  else
+    echo "Config: disabled (${SYSCTL_CONF} not found)"
+  fi
+  sysctl net.core.default_qdisc || true
+  sysctl net.ipv4.tcp_congestion_control || true
+  echo
+  echo "Swap:"
+  swapon --show || true
+  echo
+  echo "SSH auth (effective):"
+  if command -v sshd >/dev/null 2>&1; then
+    sshd -T 2>/dev/null | grep -E '^(passwordauthentication|pubkeyauthentication|kbdinteractiveauthentication|challengeresponseauthentication|usepam|permitrootlogin)\b' || true
+  else
+    if [[ -f "$SSHD_DROPIN" ]]; then
+      cat "$SSHD_DROPIN"
+    else
+      echo "sshd not found; no drop-in at ${SSHD_DROPIN}"
+    fi
+  fi
+  echo "============================"
+}
+
 menu() {
   while true; do
     echo
@@ -221,6 +249,7 @@ menu() {
     echo "3) 启用密钥登录（写入指定 key）"
     echo "4) 启用密码登录并关闭密钥登录"
     echo "5) 检测内存并创建 swap"
+    echo "6) 查看当前状态"
     echo "0) 退出"
     echo "=========================="
     read -rp "请选择: " choice
@@ -242,6 +271,9 @@ menu() {
       5)
         create_or_enable_swap_1g
         show_summary
+        ;;
+      6)
+        show_status
         ;;
       0)
         exit 0
