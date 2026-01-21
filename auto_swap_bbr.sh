@@ -18,7 +18,8 @@ mem_total_mb() {
 }
 
 has_swap_active() {
-  swapon --show 2>/dev/null | awk 'NR>1 {print $1}' | grep -qx "$SWAPFILE"
+  # /proc/swaps exists on Debian/Ubuntu; avoid relying on swapon output format
+  awk 'NR>1 {print $1}' /proc/swaps | grep -qx "$SWAPFILE"
 }
 
 has_swap_in_fstab() {
@@ -46,10 +47,16 @@ create_or_enable_swap_1g() {
   # If swapfile exists but not active, try to enable it
   if [[ -f "$SWAPFILE" ]]; then
     chmod 600 "$SWAPFILE" || true
-    if ! file "$SWAPFILE" | grep -qi "swap file"; then
-      echo "[WARN] ${SWAPFILE} exists but not a swapfile. Recreating..."
-      rm -f "$SWAPFILE"
+    if swapon "$SWAPFILE" 2>/dev/null; then
+      if ! has_swap_in_fstab; then
+        echo "[INFO] Persisting swap in /etc/fstab"
+        echo "${SWAPFILE} none swap sw 0 0" >> /etc/fstab
+      fi
+      echo "[OK] Swap enabled."
+      return 0
     fi
+    echo "[WARN] ${SWAPFILE} exists but cannot be enabled. Recreating..."
+    rm -f "$SWAPFILE"
   fi
 
   if [[ ! -f "$SWAPFILE" ]]; then
