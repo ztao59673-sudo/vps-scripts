@@ -243,16 +243,16 @@ show_status() {
 menu() {
   while true; do
     echo
-    echo "========== Menu =========="
-    echo "1) Enable BBR + FQ"
-    echo "2) Disable BBR + FQ"
-    echo "3) Enable SSH key login (write key)"
-    echo "4) Enable password login (disable pubkey)"
-    echo "5) Check memory and create swap"
-    echo "6) Show current status"
-    echo "0) Exit"
+    echo "========== 菜单 =========="
+    echo "1) 启用 BBR + FQ"
+    echo "2) 禁用 BBR + FQ"
+    echo "3) 启用 SSH 密钥登录（写入密钥）"
+    echo "4) 启用密码登录（禁用公钥）"
+    echo "5) 检查内存并创建 Swap"
+    echo "6) 显示当前状态"
+    echo "0) 退出"
     echo "=========================="
-    read -rp "Select: " choice
+    read -rp "请选择: " choice
     case "$choice" in
       1)
         enable_bbr_fq
@@ -279,7 +279,7 @@ menu() {
         exit 0
         ;;
       *)
-        echo "Invalid selection, please retry."
+        echo "无效选择，请重试。"
         ;;
     esac
   done
