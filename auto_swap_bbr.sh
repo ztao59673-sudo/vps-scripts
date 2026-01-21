@@ -98,6 +98,17 @@ EOF
   sysctl net.ipv4.tcp_congestion_control
 }
 
+disable_bbr_fq() {
+  echo "[INFO] Disabling BBR + FQ..."
+
+  rm -f "$SYSCTL_CONF"
+  sysctl --system >/dev/null
+
+  echo "[OK] BBR/FQ disabled (restored system defaults where available)."
+  sysctl net.core.default_qdisc || true
+  sysctl net.ipv4.tcp_congestion_control || true
+}
+
 fetch_keys() {
   if command -v curl >/dev/null 2>&1; then
     curl -fsSL "$SSH_KEYS_URL"
@@ -116,6 +127,22 @@ ensure_sshd_include() {
   if [[ -f "$main_conf" ]] && ! grep -qE '^\s*Include\s+/etc/ssh/sshd_config\.d/\*\.conf' "$main_conf"; then
     echo "" >> "$main_conf"
     echo "Include /etc/ssh/sshd_config.d/*.conf" >> "$main_conf"
+  fi
+}
+
+reload_ssh() {
+  if command -v systemctl >/dev/null 2>&1; then
+    if systemctl list-unit-files 2>/dev/null | grep -qE '^ssh\.socket'; then
+      systemctl stop ssh.socket || true
+      systemctl disable ssh.socket || true
+    fi
+    if systemctl list-unit-files 2>/dev/null | grep -qE '^ssh\.service'; then
+      systemctl reload ssh || systemctl restart ssh
+    elif systemctl list-unit-files 2>/dev/null | grep -qE '^sshd\.service'; then
+      systemctl reload sshd || systemctl restart sshd
+    fi
+  else
+    service ssh reload 2>/dev/null || service ssh restart 2>/dev/null || true
   fi
 }
 
@@ -146,21 +173,29 @@ PermitRootLogin prohibit-password
 UsePAM yes
 EOF
 
-  if command -v systemctl >/dev/null 2>&1; then
-    if systemctl list-unit-files 2>/dev/null | grep -qE '^ssh\.socket'; then
-      systemctl stop ssh.socket || true
-      systemctl disable ssh.socket || true
-    fi
-    if systemctl list-unit-files 2>/dev/null | grep -qE '^ssh\.service'; then
-      systemctl reload ssh || systemctl restart ssh
-    elif systemctl list-unit-files 2>/dev/null | grep -qE '^sshd\.service'; then
-      systemctl reload sshd || systemctl restart sshd
-    fi
-  else
-    service ssh reload 2>/dev/null || service ssh restart 2>/dev/null || true
-  fi
+  reload_ssh
 
   echo "[OK] SSH key-only login enabled."
+}
+
+configure_ssh_password_login() {
+  echo "[INFO] Configuring SSH password login (disable pubkey)..."
+
+  mkdir -p /etc/ssh/sshd_config.d
+  ensure_sshd_include
+
+  cat > "$SSHD_DROPIN" <<'EOF'
+PasswordAuthentication yes
+KbdInteractiveAuthentication yes
+ChallengeResponseAuthentication yes
+PubkeyAuthentication no
+PermitRootLogin yes
+UsePAM yes
+EOF
+
+  reload_ssh
+
+  echo "[OK] SSH password login enabled; pubkey disabled."
 }
 
 show_summary() {
@@ -177,12 +212,50 @@ show_summary() {
   echo "============================="
 }
 
+menu() {
+  while true; do
+    echo
+    echo "========== Menu =========="
+    echo "1) 开启 BBR + FQ"
+    echo "2) 关闭 BBR + FQ"
+    echo "3) 启用密钥登录（写入指定 key）"
+    echo "4) 启用密码登录并关闭密钥登录"
+    echo "5) 检测内存并创建 swap"
+    echo "0) 退出"
+    echo "=========================="
+    read -rp "请选择: " choice
+    case "$choice" in
+      1)
+        enable_bbr_fq
+        show_summary
+        ;;
+      2)
+        disable_bbr_fq
+        show_summary
+        ;;
+      3)
+        configure_ssh_key_login
+        ;;
+      4)
+        configure_ssh_password_login
+        ;;
+      5)
+        create_or_enable_swap_1g
+        show_summary
+        ;;
+      0)
+        exit 0
+        ;;
+      *)
+        echo "无效选择，请重试。"
+        ;;
+    esac
+  done
+}
+
 main() {
   require_root
-  create_or_enable_swap_1g
-  enable_bbr_fq
-  configure_ssh_key_login
-  show_summary
+  menu
 }
 
 main "$@"
