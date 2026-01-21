@@ -104,6 +104,34 @@ disable_bbr_fq() {
   rm -f "$SYSCTL_CONF"
   sysctl --system >/dev/null
 
+  local avail cc
+  avail="$(sysctl -n net.ipv4.tcp_available_congestion_control 2>/dev/null || true)"
+  for cc in cubic reno; do
+    if grep -qw "$cc" <<<"$avail"; then
+      if sysctl -w "net.ipv4.tcp_congestion_control=${cc}" >/dev/null 2>&1; then
+        echo "[OK] Set congestion control to ${cc}."
+        break
+      fi
+    fi
+  done
+  if sysctl -n net.ipv4.tcp_congestion_control 2>/dev/null | grep -qw bbr; then
+    for cc in $avail; do
+      if [[ "$cc" != "bbr" ]]; then
+        if sysctl -w "net.ipv4.tcp_congestion_control=${cc}" >/dev/null 2>&1; then
+          echo "[OK] Set congestion control to ${cc}."
+          break
+        fi
+      fi
+    done
+  fi
+
+  for qdisc in pfifo_fast fq_codel noqueue; do
+    if sysctl -w "net.core.default_qdisc=${qdisc}" >/dev/null 2>&1; then
+      echo "[OK] Set default qdisc to ${qdisc}."
+      break
+    fi
+  done
+
   echo "[OK] BBR/FQ disabled (restored system defaults where available)."
   sysctl net.core.default_qdisc || true
   sysctl net.ipv4.tcp_congestion_control || true
